@@ -1,0 +1,14 @@
+<table>
+    <tr>
+        <th>Nom</th>
+        <th>CPU</th>
+        <th>RAM</th>
+    </tr>
+    {{ range . }}
+    <tr>
+        <td>{{ .Name }}</td>
+        <td>{{ .CPU }}</td>
+        <td>{{ .RAM }}</td>
+    </tr>
+    {{ end }}
+</table>

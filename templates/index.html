@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Monitoring</title>
+    <script src="https://unpkg.com/htmx.org@1.9.5"></script>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <h1>🚀 Dashboard Monitoring</h1>
+    <button hx-get="/containers" hx-trigger="click" hx-target="#container-list">
+        Charger les Conteneurs
+    </button>
+    
+    <div id="container-list">
+        <!-- Conteneurs chargés dynamiquement ici -->
+    </div>
+</body>
+</html>
