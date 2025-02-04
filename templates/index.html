@@ -2,19 +2,30 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Monitoring</title>
-    <script src="https://unpkg.com/htmx.org@1.9.5"></script>
-    <link rel="stylesheet" href="/static/styles.css">
+    <title>Docker Containers Monitoring</title>
+    <script src="https://unpkg.com/htmx.org"></script>
+    <script src="https://unpkg.com/htmx.org/dist/ext/ws.js"></script>
+    <link rel="stylesheet" href="../static/styles.css" />
 </head>
 <body>
-    <h1>🚀 Dashboard Monitoring</h1>
-    <button hx-get="/containers" hx-trigger="click" hx-target="#container-list">
-        Charger les Conteneurs
-    </button>
-    
-    <div id="container-list">
-        <!-- Conteneurs chargés dynamiquement ici -->
+
+    <h1>Monitoring des Conteneurs Docker</h1>
+    <div hx-ext="ws" ws-connect="ws://localhost:8080/ws">
+        <div id="container-list" ws-receive>
+        </div>
     </div>
+
+    <script>
+        document.addEventListener("htmx:wsAfterMessage", function(event) {
+            let containers = JSON.parse(event.detail.message);
+            let html = containers.map(c => 
+                `<div class="container">
+                    <strong>${c.name}</strong> - CPU: ${c.cpu}, RAM: ${c.ram}
+                </div>`
+            ).join("");
+            document.getElementById("container-list").innerHTML = html;
+        });
+    </script>
+
 </body>
 </html>
