@@ -19,6 +19,7 @@ type Container struct {
 	Name string `json:"name"`
 	CPU  string `json:"cpu"`
 	RAM  string `json:"ram"`
+	Logs string `json:"logs"`
 }
 
 var upgrader = websocket.Upgrader{
@@ -29,10 +30,10 @@ var upgrader = websocket.Upgrader{
 
 var (
 	clients   = make(map[*websocket.Conn]bool) // Track connected clients
-	broadcast = make(chan []Container)         // Channel for broadcasting updates
 	mu        sync.Mutex
 )
 
+// Récupère les stats des conteneurs
 func getContainers() []Container {
 	cmd := exec.Command("docker", "stats", "--no-stream", "--format", "{{.Name}};{{.CPUPerc}};{{.MemUsage}}")
 	var out bytes.Buffer
@@ -54,6 +55,54 @@ func getContainers() []Container {
 	return containers
 }
 
+// Récupère les logs d'un conteneur spécifique
+func getContainerLogs(containerName string) string {
+	cmd := exec.Command("docker", "logs", "--tail", "10", containerName)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		log.Println("Erreur récupération logs:", err)
+		return "Erreur récupération logs"
+	}
+	return out.String()
+}
+
+// Envoie les stats et logs des conteneurs en temps réel
+func broadcastContainers() {
+	for {
+		containers := getContainers()
+		if len(containers) == 0 {
+			continue
+		}
+
+		// Ajoute les logs pour chaque conteneur
+		for i := range containers {
+			containers[i].Logs = getContainerLogs(containers[i].Name)
+		}
+
+		data, err := json.Marshal(containers)
+		if err != nil {
+			log.Println("Erreur encodage JSON:", err)
+			continue
+		}
+
+		mu.Lock()
+		for conn := range clients {
+			err := conn.WriteMessage(websocket.TextMessage, data)
+			if err != nil {
+				fmt.Println("Erreur envoi message :", err)
+				conn.Close()
+				delete(clients, conn)
+			}
+		}
+		mu.Unlock()
+
+		time.Sleep(2 * time.Second) // Mise à jour toutes les 2 secondes
+	}
+}
+
+// Gestion des connexions WebSocket
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -64,6 +113,8 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	clients[conn] = true
 	mu.Unlock()
+
+	// Garde la connexion active
 	for {
 		_, _, err := conn.ReadMessage()
 		if err != nil {
@@ -75,41 +126,17 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func broadcastContainers() {
-	for {
-		containers := getContainers()
-		if len(containers) == 0 {
-			continue
-		}
-		data, err := json.Marshal(containers)
-		if err != nil {
-			log.Println("Erreur encodage JSON:", err)
-			continue
-		}
-		mu.Lock()
-		for conn := range clients {
-			err := conn.WriteMessage(websocket.TextMessage, data)
-			if err != nil {
-				fmt.Println("Erreur envoi message :", err)
-				conn.Close()
-				delete(clients, conn)
-			}
-		}
-		mu.Unlock()
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
-func getIndex(w http.ResponseWriter, r *http.Request){
+func getIndex(w http.ResponseWriter, r *http.Request) {
 	tmpl := template.Must(template.ParseFiles("templates/index.html"))
 	tmpl.Execute(w, nil)
-	
 }
 
 func main() {
 	http.HandleFunc("/", getIndex)
 	http.HandleFunc("/ws", handleWebSocket)
 	go broadcastContainers()
+
+	fmt.Println("Serveur en cours d'exécution sur : http://localhost:8080")
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		fmt.Println("Erreur serveur :", err)
